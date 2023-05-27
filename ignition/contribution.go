@@ -128,20 +128,25 @@ func sameRatio(a1, b1 bn254.G1Affine, a2, b2 bn254.G2Affine) bool {
 	return res
 }
 
+var initROnce sync.Once
+var rVector []fr.Element
+
 // L1 = ∑ rᵢAᵢ, L2 = ∑ rᵢAᵢ₊₁ in G1
 func linearCombinationG1(A []bn254.G1Affine) (L1, L2 bn254.G1Affine) {
 	nc := runtime.NumCPU()
 	n := len(A)
-	r := make([]fr.Element, n-1)
-	for i := 0; i < n-1; i++ {
-		r[i].SetRandom()
-	}
+	initROnce.Do(func() {
+		rVector = make([]fr.Element, n-1)
+		for i := 0; i < n-1; i++ {
+			rVector[i].SetRandom()
+		}
+	})
 	chDone := make(chan struct{})
 	go func() {
-		L1.MultiExp(A[:n-1], r, ecc.MultiExpConfig{NbTasks: nc / 2})
+		L1.MultiExp(A[:n-1], rVector, ecc.MultiExpConfig{NbTasks: nc / 2})
 		close(chDone)
 	}()
-	L2.MultiExp(A[1:], r, ecc.MultiExpConfig{NbTasks: nc / 2})
+	L2.MultiExp(A[1:], rVector, ecc.MultiExpConfig{NbTasks: nc / 2})
 	<-chDone
 	return
 }

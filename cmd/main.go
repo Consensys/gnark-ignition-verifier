@@ -12,12 +12,14 @@ import (
 	"github.com/consensys/gnark-ignition-verifier/ignition"
 )
 
+const startIdx = 30
+
 func main() {
 
 	// Example usage of the ignition package
 	config := ignition.Config{
 		BaseURL:  "https://aztec-ignition.s3.amazonaws.com/",
-		Ceremony: "TINY_TEST_7", // "MAIN IGNITION"
+		Ceremony: "TINY_TEST_5", // "MAIN IGNITION"
 		CacheDir: "./data",
 	}
 	if config.CacheDir != "" {
@@ -32,24 +34,26 @@ func main() {
 	}
 
 	// sanity check
-	if len(manifest.Participants) <= 1 {
+	if len(manifest.Participants) <= startIdx+1 {
 		log.Fatal("not enough participants")
 	}
-
+	// p := profile.Start(profile.MemProfile, profile.ProfilePath("."), profile.NoShutdownHook)
 	// 2. we read two contributions at a time, and check that the second one follows the first one
 	current, next := ignition.NewContribution(manifest.NumG1Points), ignition.NewContribution(manifest.NumG1Points)
 
-	log.Println("processing contributions 1 and 2")
-	if err := current.Get(manifest.Participants[0], config); err != nil {
-		log.Fatal("when fetching contribution 1: ", err)
+	config.CacheDir = "" // temporary hack to avoid downloading all files.
+
+	log.Printf("processing contributions %d and %d", startIdx, startIdx+1)
+	if err := current.Get(manifest.Participants[startIdx], config); err != nil {
+		log.Fatal("when fetching contribution: ", err)
 	}
-	if err := next.Get(manifest.Participants[1], config); err != nil {
-		log.Fatal("when fetching contribution 2: ", err)
+	if err := next.Get(manifest.Participants[startIdx+1], config); err != nil {
+		log.Fatal("when fetching contribution: ", err)
 	}
 	if !next.Follows(&current) {
-		log.Fatal("contribution 2 does not follow contribution 1: ", err)
+		log.Fatalf("contribution %d does not follow contribution %d", startIdx+1, startIdx)
 	}
-	for i := 2; i < len(manifest.Participants); i++ {
+	for i := startIdx + 2; i < len(manifest.Participants); i++ {
 		log.Println("processing contribution ", i+1)
 		current, next = next, current
 		if err := next.Get(manifest.Participants[i], config); err != nil {
@@ -59,6 +63,7 @@ func main() {
 			log.Fatal("contribution ", i+1, " does not follow contribution ", i, ": ", err)
 		}
 	}
+	// p.Stop()
 
 	log.Println("success ✅: all contributions are valid")
 
@@ -80,22 +85,25 @@ func main() {
 	sanityCheck(&srs)
 	log.Println("success ✅: kzg sanity check with SRS")
 
-	// we can now serialize the SRS and use it, for example in gnark / PlonK circuits
-	if config.CacheDir != "" {
-		n := len(srs.Pk.G1)
-		srsPath := fmt.Sprintf("kzg_srs_%d_bn254_%s", n, config.Ceremony)
-		srsPath = filepath.Join(config.CacheDir, srsPath)
-		f, err := os.Create(srsPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer f.Close()
-		log.Println("writing SRS to ", srsPath)
-		if _, err := srs.WriteTo(f); err != nil {
-			log.Fatal(err)
-		}
-		log.Println("success ✅: SRS written to ", srsPath)
+	if config.CacheDir == "" {
+		config.CacheDir = "./data"
+		os.MkdirAll(config.CacheDir, os.ModePerm)
 	}
+
+	// we can now serialize the SRS and use it, for example in gnark / PlonK circuits
+	n := len(srs.Pk.G1)
+	srsPath := fmt.Sprintf("kzg_srs_%d_bn254_%s", n, config.Ceremony)
+	srsPath = filepath.Join(config.CacheDir, srsPath)
+	f, err := os.Create(srsPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	log.Println("writing SRS to ", srsPath)
+	if _, err := srs.WriteTo(f); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("success ✅: SRS written to ", srsPath)
 
 }
 
