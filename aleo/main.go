@@ -111,7 +111,6 @@ func main() {
 				log.Fatalf("TauG1[1] for chunk %d not computed well.", i)
 			}
 		}
-
 		// the Aztec way
 		if !currChunk.IsValid() {
 			log.Fatalf("chunk %d of last round is not valid (the aztec way)", i)
